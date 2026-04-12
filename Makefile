@@ -1,6 +1,12 @@
 .PHONY: all
 all: static-install
 
+VENDOR_DIR = vendor
+ZLIB_DIR = $(VENDOR_DIR)/zlib
+CRYPTOPP_DIR = $(VENDOR_DIR)/cryptopp
+RE2_DIR = $(VENDOR_DIR)/re2
+LIBZIP_DIR = $(VENDOR_DIR)/libzip
+
 .PHONY: static-install
 static-install: pka2xml-static patch-static install
 
@@ -9,6 +15,9 @@ static-install-docker: pka2xml-static-docker patch-static install
 
 .PHONY: dynamic-install
 dynamic-install: pka2xml-dynamic patch-dynamic install
+
+.PHONY: vendor-install
+vendor-install: pka2xml-vendor patch-dynamic install
 
 .PHONY: pka2xml-static
 pka2xml-static: main.cpp
@@ -21,6 +30,16 @@ pka2xml-static-docker: main.cpp
 .PHONY: pka2xml-dynamic
 pka2xml-dynamic: main.cpp
 	g++ -o pka2xml main.cpp -I/usr/local/include -L/usr/local/lib -lcryptopp -lz -lre2
+
+.PHONY: pka2xml-vendor
+pka2xml-vendor: main.cpp
+	g++ -o pka2xml main.cpp \
+		-I. -I./vendor -I./vendor/re2 -I./vendor/zlib -I./vendor/libzip/lib -I./vendor/libzip/build \
+		$(RE2_DIR)/obj/libre2.a \
+		$(CRYPTOPP_DIR)/libcryptopp.a \
+		$(LIBZIP_DIR)/build/lib/libzip.a \
+		$(ZLIB_DIR)/libz.a \
+		-lpthread
 
 .PHONY: patch-static
 patch-static: patch.c
