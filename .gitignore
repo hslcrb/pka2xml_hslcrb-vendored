@@ -1,3 +1,4 @@
 /gui/release
 /gui/dist
 /gui/dist-electron
+.setup_done
