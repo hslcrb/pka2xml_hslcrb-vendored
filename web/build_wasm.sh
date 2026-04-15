@@ -33,8 +33,10 @@ echo "  Emscripten으로 CryptoPP를 재컴파일합니다 (시간 소요)."
 
 cd "$VENDOR/cryptopp"
 if [ ! -f libcryptopp_wasm.a ]; then
-    emmake make -f GNUmakefile-cross CROSS_COMPILE=1 \
-        CXX=em++ AR=emar RANLIB=emranlib \
+    echo "  📦 CryptoPP 컴파일 중..."
+    # CryptoPP는 기본 GNUmakefile을 시스템 변수 주입으로 빌드 가능
+    emmake make -f GNUmakefile \
+        CXXFLAGS="-DNDEBUG -g2 -O3" \
         libcryptopp.a -j4 2>&1 | tail -5
     mv libcryptopp.a libcryptopp_wasm.a
     echo "  ✓ CryptoPP WASM 컴파일 완료"
@@ -44,10 +46,11 @@ fi
 
 cd "$VENDOR/re2"
 if [ ! -f obj/libre2_wasm.a ]; then
-    emcmake cmake -S . -B build_wasm -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -2
-    emmake make -C build_wasm re2 -j4 2>&1 | tail -3
+    echo "  📦 RE2 (2022-12-01) 컴파일 중..."
+    # 최신 RE2는 Abseil 의존성이 강하므로, 2022년도 버전 사용 권장
+    emmake make CXXFLAGS="-O3 -DNDEBUG" obj/libre2.a -j4 2>&1 | tail -5
     mkdir -p obj
-    cp build_wasm/libre2.a obj/libre2_wasm.a
+    cp obj/libre2.a obj/libre2_wasm.a
     echo "  ✓ RE2 WASM 컴파일 완료"
 else
     echo "  ✓ libre2_wasm.a 이미 존재 (skip)"
@@ -62,14 +65,11 @@ emcc main.cpp \
     -I. \
     -I./vendor \
     -I./vendor/re2 \
-    -I./vendor/zlib \
-    -I./vendor/libzip/lib \
-    -I./vendor/libzip/build \
     "$VENDOR/cryptopp/libcryptopp_wasm.a" \
     "$VENDOR/re2/obj/libre2_wasm.a" \
-    -lz \
+    -s USE_ZLIB=1 \
     -std=c++17 \
-    -O2 \
+    -O3 \
     -s MODULARIZE=1 \
     -s EXPORT_NAME=createPka2xml \
     -s EXPORTED_FUNCTIONS='["_main"]' \
@@ -78,7 +78,6 @@ emcc main.cpp \
     -s INVOKE_RUN=0 \
     -s EXIT_RUNTIME=0 \
     -s ENVIRONMENT=web \
-    --preload-file /dev/null@/dev/null 2>/dev/null || true \
     -o "$OUT_DIR/pka2xml.js"
 
 echo ""
