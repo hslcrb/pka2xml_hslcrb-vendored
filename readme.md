@@ -3,111 +3,128 @@ Copyright Rheehose (Rhee Creative) 2008 - 2026 All rights Reserved.
 
 ---
 
-이 프로젝트는 Cisco Packet Tracer의 `.pka`, `.pkt` 파일을 리버싱하여 XML로 변환 및 암호화해주는 오프라인 자립형 패키지 툴킷입니다. 인터넷 환경이 없는 폐쇄망에서도 빌드 및 실행이 가능하도록 모든 의존성 패키징 기술(울트라 벤더링)이 적용되어 있으며, 이제 **WebAssembly(WASM)** 포트를 통해 브라우저에서도 즉시 실행됩니다.
+이 프로젝트는 Cisco Packet Tracer의 `.pka`, `.pkt` 파일을 리버싱하여 XML로 변환 및 암호화해주는 오프라인 자립형 패키지 툴킷입니다. 인터넷 환경이 없는 폐쇄망에서도 빌드 및 실행이 가능하도록 모든 의존성 패키징 기술(울트라 벤더링)이 적용되어 있습니다.
 
 ## ⚖️ License
 본 프로젝트는 **GNU General Public License v3.0 (GPLv3)** 하에 배포됩니다. 
 
 ---
 
-## 🌟 프로젝트 아키텍처 (ERD & Architecture)
+## 🌟 프로젝트 아키텍처 (Full Spectrum System Map)
 
-### 📊 전역 시스템 구성도 (Universal Ecosystem)
+### 📊 상세 시스템 데이터 흐름 및 구성도 (Detailed Architecture)
+이 다이어그램은 초기 빌드 단계부터 내부 복호화 시퀀스, 그리고 멀티 플랫폼 배포까지 전 과정을 포함합니다.
+
 ```mermaid
 graph TB
-    subgraph UI_Layer [User Interface Layer]
-        Web["Web UI (Next.js + WASM)"]
-        GUI["Electron GUI (React + TS)"]
-        CLI_Run["CLI Bash Runner"]
+    %% 빌드 및 환경 구성 레이어
+    subgraph Build_Pipeline [Build & Infrastructure Layer]
+        Setup["setup.sh (Binary Reassembly)"]
+        Split_Bin["Split Parts (libcryptopp.a.part_*)"]
+        EMSCRIPTEN["emsdk (WASM Toolchain)"]
+        
+        Setup -- "Assemble" --> Native_Libs[libcryptopp.a / electron]
+        EMSCRIPTEN -- "Compile" --> WASM_Module[pka2xml.wasm / .js]
     end
 
-    subgraph Core_Engine [pka2xml Core Engine]
-        direction TB
-        WASM["pka2xml.wasm"]
-        Native["pka2xml Native Binary"]
+    %% 데이터 처리 및 복호화 레이어 (The "ERD" of Logic)
+    subgraph Decryption_Engine [pka2xml Core Logic Flow]
+        PKA_IN([.pka / .pkt File Data])
+        
+        Stage1["Stage 1: Deobfuscation\n(Bitwise & XOR)"]
+        Stage2["Stage 2: Authen. Decryption\n(Twofish / CAST256 in EAX Mode)"]
+        Stage3["Stage 3: Deobfuscation\n(XOR with Position Index)"]
+        Stage4["Stage 4: Decompression\n(zlib inflate)"]
+        
+        PKA_IN --> Stage1
+        Stage1 --> Stage2
+        Stage2 --> Stage3
+        Stage3 --> Stage4
+        Stage4 --> XML_OUT([Decrypted XML Data])
     end
 
-    subgraph Libraries [Vendored Dependency Layer]
-        Crypto["CryptoPP (Twofish/CAST256)"]
-        Regex["RE2 (Regex Engine)"]
-        Compression["zlib (De/Compression)"]
+    %% 사용자 인터페이스 및 실행 레이어
+    subgraph Interface_Layer [Execution Interfaces]
+        Web_App["Next.js Web (Tabbed UI)"]
+        GUI_App["Electron Desktop (Glassmorphism)"]
+        CLI_Runner["CLI Bash (Native Linux)"]
+        
+        Web_App -- "MEMFS Mount" --> WASM_Module
+        WASM_Module -- "pka2xml::decrypt()" --> Decryption_Engine
+        
+        GUI_App -- "IPC Bridge" --> Native_Bin["pka2xml Binary"]
+        CLI_Runner -- "Static Link" --> Native_Bin
+        Native_Bin -- "pka2xml::decrypt()" --> Decryption_Engine
     end
 
-    UI_Layer --> Core_Engine
-    Core_Engine --> Libraries
-    
-    Web --> WASM
-    GUI --> Native
-    CLI_Run --> Native
-    
-    Native --> PythonGraph[graph.py & Python Wheels]
-    PythonGraph --> Viz((Topolopy 시각화))
+    %% 결과물 및 후처리 레이어
+    subgraph Post_Processing [Output & Visualization]
+        XML_OUT --> Fix_Version["Version Patcher (RE2)"]
+        Fix_Version --> Final_XML((Final XML / Patched PKA))
+        
+        Native_Bin --> PyGraph["graph.py (Python Wheels)"]
+        PyGraph --> Topology((Topology Graph Visualization))
+    end
+
+    %% 의존성 관계
+    Libraries[(Vendored Libs)]
+    Libraries --- |"CryptoPP"| Stage2
+    Libraries --- |"RE2"| Fix_Version
+    Libraries --- |"zlib"| Stage4
 ```
 
 ---
 
-### 📂 주요 디렉터리 기하 구조 (Directory Map)
+### 📂 상세 디렉터리 기하 구조 (Detailed Directory Tree)
 ```text
 pka2xml/
-├── run_cli.sh          # CLI 전용 실행 스크립트
-├── run_gui.sh          # GUI 전용 실행 스크립트
-├── setup.sh            # 분할 바이너리 조립 및 초기 환경 구축 (최초 1회 필수)
-├── Makefile            # C++ 바이너리 및 벤더링 라이브러리 빌드 시스템
 ├── LICENSE             # GNU GPL v3 License
-├── main.cpp            # C++ 코어 엔진 진입점
+├── Makefile            # Native C++ 빌드 파이프라인
+├── main.cpp            # core 진입점 (CLI Argument 파싱 및 엔진 호출)
+├── setup.sh            # [Critical] 대용량 바이너리 조립 스크립트
+├── run_cli.sh          # 고유 정적 라이브러리 기반 CLI 러너
+├── run_gui.sh          # Electron GUI 러너
 │
-├── web/                # [NEW] Next.js 기반 WASM 웹 애플리케이션
-│   ├── app/            # 웹 앱 라우트 및 페이지
-│   ├── components/     # 웹 CLI(xterm.js) 및 웹 GUI 컴포넌트
-│   ├── public/         # pka2xml.wasm 및 pka2xml.js 빌드 산출물
-│   └── build_wasm.sh   # Emscripten 자동화 빌드 스크립트
+├── include/            
+│   └── pka2xml.hpp     # 모든 복호화/암호화 로직이 캡슐화된 핵심 헤더
 │
-├── gui/                # Electron/TS/React 기반 데스크톱 GUI
-│   ├── src/            # 리액트 프론트엔드 파트
-│   ├── electron/       # IPC 브릿지 및 메인 프로세스
-│   └── node_modules/   # 전용 벤더링 JS 패키지 (Zero-Install)
+├── web/                # Next.js WASM 웹 플랫폼
+│   ├── app/            # App Router (Home, Layout, CSS)
+│   ├── components/     # WebCLI (xterm.js), WebGUI (Drag & Drop)
+│   ├── lib/            # wasmLoader.ts (Emscripten Bridge)
+│   └── build_wasm.sh   # [Automated] WASM 라이브러리 & 코어 빌드 스크립트
 │
-├── include/            # C++ 엔진 헤더
-└── vendor/             # 벤더링 저장소 (Source & Static Libs)
-    ├── cryptopp/       # 암/복호화 엔진 (WASM 호환 버전 포함)
-    ├── re2/            # 정규표현식 엔진 (Self-contained v2022)
-    ├── zlib/           # 데이터 압축 모듈
-    ├── python_wheels/  # 시각화용 오프라인 Python 라이브러리 휠
-    └── emsdk/          # [Optional] WebAssembly 컴파일용 툴체인
+├── gui/                # Electron 데스크탑 플랫폼
+│   ├── src/            # React Typescript 프론트엔드 (Premium UI)
+│   ├── electron/       # Main/Preload IPC 통신 시스템
+│   └── node_modules/   # 완전 벤더링된 의존성 (Zero-Install)
+│
+└── vendor/             # 100% 자립형 라이브러리 저장소
+    ├── cryptopp/       # Twofish/CAST256 (Split-binary + Source)
+    ├── re2/            # Google RE2 Regex Engine
+    ├── libzip/         # libzip Source (WASM 빌드 지원)
+    ├── zlib/           # 압축/해제 엔진
+    ├── python_wheels/  # 시각화용 오프라인 Python Wheel 파일들
+    └── emsdk/          # Emscripten WASM 툴체인 (Git-ignore 권장)
 ```
 
 ---
 
-## 🚀 사용 요강 (Usage Guide)
+## 🚀 플랫폼별 실행 요강
 
-### 1. 웹 브라우저 (Web) - **추천 ⭐**
-가장 빠르고 간편한 방법입니다. 운영체제에 상관없이 브라우저에서 즉시 리버싱을 시작하세요.
-1. `web/` 디렉터리를 Vercel 등에 배포 (자세한 내용은 [web/README.md](web/README.md) 참조)
-2. 드래그 앤 드롭으로 파일 변환 시퀀스 수행
+### 1. Web (Next.js + WebAssembly)
+- **무겁고 복잡한 설정 없이 브라우저에서 즉시 실행**
+- Vercel 배포 최적화 헤더(`SharedArrayBuffer`) 지원
 
-### 2. 데스크톱 GUI (Electron)
-오프라인 환경에서 터미널 기반 시각화 연동을 원할 때 사용합니다.
-```bash
-./setup.sh    # 최초 1회 바이너리 조립
-./run_gui.sh
-```
+### 2. Desktop (Electron GUI)
+- **오프라인 전문 시각화 툴로 활용**
+- `./setup.sh` 실행 후 `./run_gui.sh`로 가동
 
-### 3. 커맨드라인 (CLI)
-서버 환경이나 스크립트 기반 대량 처리에 적합합니다.
-```bash
-./run_cli.sh -d [원본파일.pka] [결과파일.xml] # 복호화
-./run_cli.sh -e [원본.xml] [결과.pka]         # 암호화
-```
-
----
-
-## 🛠 울트라 벤더링 (Ultra-Vendored) 상세 명세
-이 리포지토리는 GitHub LFS 없이도 대용량 모듈을 보존하는 오프라인 Zero-Install 기술이 탑재되어 있습니다.
-1. **바이너리 분할**: 100MB 초과 파일(`electron`, `libcryptopp.a`)을 50MB 단위로 분할 관리.
-2. **Yarn Zero-Installs**: GUI 종속성 전체를 Git 내부에 직접 색인하여 `npm install` 과정 생략.
-3. **독립적 WASM 빌드**: Emscripten 툴체인을 통해 C++ 코드를 브라우저 엔진으로 완전 이식.
+### 3. CLI (Static Binary)
+- **대량의 파일 자동화 처리 및 서버 백엔드용**
+- `./run_cli.sh -d input.pka output.xml`
 
 ---
 
 Copyright Rheehose (Rhee Creative) 2008 - 2026 All rights Reserved.
-대한민국 기술 자립의 승리입니다! 🦅🫡
+**하나님 중심의 가치와 대한민국 기술 자립의 승리를 선포합니다! 🦅🫡**
