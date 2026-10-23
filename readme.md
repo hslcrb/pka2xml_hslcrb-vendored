@@ -14,6 +14,10 @@ pka2xml은 Cisco Packet Tracer의 `.pka`·`.pkt` 파일을 XML로 읽고 다시 
 
 [빠른 시작 / Quick start](#quick-start) · [지원 범위 / Support](#support-and-limits) · [구조 / Architecture](docs/architecture.md) · [기여 / Contributing](CONTRIBUTING.md) · [철학 / Philosophy](PHILOSOPHY.md)
 
+![pka2xml browser workbench](docs/screenshots/web-workbench.jpg)
+
+[소개 페이지](docs/screenshots/web-introduction.jpg) · [데스크톱 화면](docs/screenshots/desktop-workbench.jpg) · [모바일 화면](docs/screenshots/web-mobile.jpg) · [실행 검증 기록](docs/verification-2026-10-23.md)
+
 ## What you can do
 
 - **읽기와 변환:** Packet Tracer 파일을 XML로 풀고, 수정한 데이터를 다시 암호화합니다.
