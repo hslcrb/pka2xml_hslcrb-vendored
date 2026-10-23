@@ -2,6 +2,7 @@
 /gui/dist
 /gui/dist-electron
 .setup_done
+/pka2xml
 .build/
 pka2xml.building
 tests/__pycache__/

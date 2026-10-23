@@ -29,8 +29,8 @@ system archives. Those alternatives remain available, but the current execution
 evidence uses the pinned-source build. zlib must provide `uncompress2` (1.2.9+).
 
 Setup rebuilds the executable and stops if any command fails. The launcher checks
-source and binary checksums before running, so the historical tracked executable
-or a stale success marker cannot silently stand in for a current source build.
+source and binary checksums before running, so a stale executable or success
+marker cannot silently stand in for a current local source build.
 Run setup again after updating sources or replacing the executable. The launchers
 accept paths with spaces and preserve the CLI caller's working directory.
 
