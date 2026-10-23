@@ -119,7 +119,10 @@ function createWindow() {
   win.webContents.on('will-navigate', (event, url) => {
     if (!isTrustedFrame(url, rendererURL, true)) event.preventDefault()
   })
-  win.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+  win.webContents.session.setPermissionCheckHandler((contents, permission, _origin, details) =>
+    contents === win?.webContents && permission === 'clipboard-sanitized-write' && isTrustedFrame(details.requestingUrl ?? '', rendererURL, details.isMainFrame))
+  win.webContents.session.setPermissionRequestHandler((contents, permission, callback, details) =>
+    callback(contents === win?.webContents && permission === 'clipboard-sanitized-write' && isTrustedFrame(details.requestingUrl, rendererURL, details.isMainFrame)))
   win.on('closed', () => { activeJob?.abort(); win = null })
   void win.loadURL(rendererURL)
 }
