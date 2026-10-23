@@ -52,6 +52,23 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 7)
         self.assertFalse((self.project / ".setup_done").exists())
 
+    def test_gui_reports_missing_electron_runtime_before_launching_npm(self):
+        fake_tools = self.work / "gui-tools"
+        fake_tools.mkdir()
+        fake_npm = fake_tools / "npm"
+        fake_npm.write_text("#!/bin/sh\nexit 99\n")
+        fake_npm.chmod(0o755)
+        vite = self.project / "gui/node_modules/.bin/vite"
+        vite.parent.mkdir(parents=True)
+        vite.write_text("#!/bin/sh\nexit 0\n")
+        vite.chmod(0o755)
+        result = subprocess.run([str(self.project / "run_gui.sh")], cwd=self.work,
+                                env={**os.environ, "PATH": f"{fake_tools}:/usr/bin:/bin"},
+                                capture_output=True, stdin=subprocess.DEVNULL)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(b"Desktop runtime is missing", result.stderr)
+        self.assertIn(b"./setup.sh", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,7 +20,7 @@ C/C++ runtime libraries; it is **not** a fully static, cross-platform release.
 Rebuild with `./setup.sh` on the target system. Windows and macOS native builds
 were not validated in this change.
 
-The stripped executable passed all 23 native CLI, launcher, and topology
+The stripped executable passed all 24 native CLI, launcher, and topology
 regression tests, including a real Packet Tracer fixture and byte-identical
 round trips. See [native build](native-build.md) for reproducible commands.
 
