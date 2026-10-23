@@ -8,30 +8,48 @@
 #include <re2/re2.h>
 #include <zlib.h>
 
-#include <cstdlib>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace pka2xml {
 
+inline constexpr std::size_t max_plaintext_bytes = 128u * 1024u * 1024u;
+inline constexpr std::size_t max_encoded_bytes = 129u * 1024u * 1024u;
+
 /// \brief Uncompress buffer with zlib. Opposite of `compress`.
 ///
 /// First four bytes correspond to the uncompressd output size.
-inline std::string uncompress(const unsigned char *data, int nbytes) {
-	unsigned long len = (data[0] << 24)
-		| (data[1] << 16)
-		| (data[2] << 8)
-		| (data[3]);
-
-	std::vector<unsigned char> buf(len);
-
-	int res = ::uncompress(buf.data(), &len, data + 4, nbytes - 4);
-
-	if (res != Z_OK) {
-		throw res;
+inline std::string uncompress(const unsigned char *data, std::size_t nbytes) {
+	if (data == nullptr || nbytes < 4) {
+		throw std::invalid_argument("truncated compressed input");
+	}
+	if (nbytes > max_encoded_bytes) {
+		throw std::length_error("compressed input exceeds the 129 MiB limit");
+	}
+	const std::uint32_t expected = (std::uint32_t{data[0]} << 24)
+		| (std::uint32_t{data[1]} << 16)
+		| (std::uint32_t{data[2]} << 8)
+		| std::uint32_t{data[3]};
+	if (expected > max_plaintext_bytes) {
+		throw std::length_error("decompressed output exceeds the 128 MiB limit");
 	}
 
-	return std::string(reinterpret_cast<const char *>(buf.data()), buf.size());
+	// One byte also lets zlib distinguish an empty stream from invalid data.
+	std::vector<unsigned char> buf(expected == 0 ? 1 : expected);
+	uLongf length = buf.size();
+	uLong compressed_length = nbytes - 4;
+	const int result = ::uncompress2(buf.data(), &length, data + 4, &compressed_length);
+	if (result != Z_OK) {
+		throw std::runtime_error("invalid compressed data (zlib status " + std::to_string(result) + ")");
+	}
+	if (length != expected || compressed_length != nbytes - 4) {
+		throw std::runtime_error("compressed data length does not match its header or contains trailing bytes");
+	}
+	return std::string(reinterpret_cast<const char *>(buf.data()), length);
 }
 
 /// 1. deobfuscation:
@@ -63,16 +81,22 @@ template <typename Algorithm>
 inline std::string decrypt(const std::string &input,
                            const std::array<unsigned char, 16> &key,
                            const std::array<unsigned char, 16> &iv) {
+	if (input.size() < Algorithm::BLOCKSIZE) {
+		throw std::invalid_argument("truncated encrypted input");
+	}
+	if (input.size() > max_encoded_bytes) {
+		throw std::length_error("encrypted input exceeds the 129 MiB limit");
+	}
 	typename CryptoPP::EAX<Algorithm>::Decryption d;
 	d.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
 
-	int length = input.size();
+	const std::size_t length = input.size();
 	std::string processed(length, '\0');
 	std::string output;
 
 	// Stage 1 - deobfuscation
-	for (int i = 0; i < length; i++) {
-		processed[i] = input[length + ~i] ^ (length - i * length);
+	for (std::size_t i = 0; i < length; i++) {
+		processed[i] = input[length - 1 - i] ^ static_cast<unsigned char>(length - i * length);
 	}
 
 	// Stage 2 - decryption
@@ -81,8 +105,8 @@ inline std::string decrypt(const std::string &input,
 				new CryptoPP::StringSink(output)));
 
 	// Stage 3 - deobfuscation
-	for (int i = 0; i < output.size(); i++) {
-		output[i] = output[i] ^ (output.size() - i);
+	for (std::size_t i = 0; i < output.size(); i++) {
+		output[i] ^= static_cast<unsigned char>(output.size() - i);
 	}
 
 	// Stage 4 - decompression
@@ -95,16 +119,22 @@ template <typename Algorithm>
 inline std::string decrypt2(const std::string &input,
                             const std::array<unsigned char, 16> &key,
                             const std::array<unsigned char, 16> &iv) {
+	if (input.size() < Algorithm::BLOCKSIZE) {
+		throw std::invalid_argument("truncated encrypted input");
+	}
+	if (input.size() > max_encoded_bytes) {
+		throw std::length_error("encrypted input exceeds the 129 MiB limit");
+	}
 	typename CryptoPP::EAX<Algorithm>::Decryption d;
 	d.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
 
-	int length = input.size();
+	const std::size_t length = input.size();
 	std::string processed(length, '\0');
 	std::string output;
 
 	// Stage 1 - deobfuscation
-	for (int i = 0; i < length; i++) {
-		processed[i] = input[length + ~i] ^ (length - i * length);
+	for (std::size_t i = 0; i < length; i++) {
+		processed[i] = input[length - 1 - i] ^ static_cast<unsigned char>(length - i * length);
 	}
 
 	// Stage 2 - decryption
@@ -112,6 +142,9 @@ inline std::string decrypt2(const std::string &input,
 			new CryptoPP::AuthenticatedDecryptionFilter(d,
 				new CryptoPP::StringSink(output)));
 
+	if (output.size() > max_plaintext_bytes) {
+		throw std::length_error("decrypted output exceeds the 128 MiB limit");
+	}
 	return output;
 }
 
@@ -124,8 +157,11 @@ inline std::string decrypt_pka(const std::string &input) {
 }
 
 inline std::string decrypt_old(std::string input) {
-	for (int i = 0; i < input.size(); i++) {
-		input[i] = input[i] ^ (input.size() - i);
+	if (input.size() > max_encoded_bytes) {
+		throw std::length_error("encrypted input exceeds the 129 MiB limit");
+	}
+	for (std::size_t i = 0; i < input.size(); i++) {
+		input[i] ^= static_cast<unsigned char>(input.size() - i);
 	}
 
 	return uncompress(reinterpret_cast<const unsigned char *>(input.data()), input.size());
@@ -138,8 +174,28 @@ inline std::string decrypt_logs(const std::string &input) {
 	static const std::array<unsigned char, 16> key{ 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186 };
 	static const std::array<unsigned char, 16> iv{ 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190 };
 
+	if (input.size() > max_encoded_bytes) {
+		throw std::length_error("encoded log line exceeds the 129 MiB limit");
+	}
+	std::string encoded;
+	for (unsigned char character : input) {
+		if (character == ' ' || character == '\t' || character == '\r' || character == '\n') {
+			continue;
+		}
+		if (!((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z') ||
+			(character >= '0' && character <= '9') || character == '+' || character == '/' || character == '=')) {
+			throw std::invalid_argument("log line contains invalid Base64 characters");
+		}
+		encoded.push_back(character);
+	}
+	const auto padding = encoded.find('=');
+	if (encoded.empty() || encoded.size() % 4 == 1 ||
+		(padding != std::string::npos && (encoded.size() % 4 != 0 ||
+		 encoded.size() - padding > 2 || encoded.find_first_not_of('=', padding) != std::string::npos))) {
+		throw std::invalid_argument("log line has invalid Base64 padding");
+	}
 	std::string decoded;
-	CryptoPP::StringSource ss(input, true,
+	CryptoPP::StringSource ss(encoded, true,
 			new CryptoPP::Base64Decoder(
 				new CryptoPP::StringSink(decoded)));
 
@@ -172,17 +228,20 @@ inline std::string decrypt_sm(const std::string &input) {
 /// \brief Compress buffer with zlib. Oppomise of `uncompress`.
 ///
 /// First four bytes correspond to the uncompressd output size.
-inline std::string compress(const unsigned char *data, int nbytes) {
-	unsigned long len = nbytes + nbytes / 100 + 13;
-
-	std::vector<unsigned char> buf(len);
-
-	buf.resize(len + 4);
+inline std::string compress(const unsigned char *data, std::size_t nbytes) {
+	if (nbytes > max_plaintext_bytes) {
+		throw std::length_error("plaintext input exceeds the 128 MiB limit");
+	}
+	if (data == nullptr && nbytes != 0) {
+		throw std::invalid_argument("missing plaintext input");
+	}
+	uLongf len = ::compressBound(nbytes);
+	std::vector<unsigned char> buf(len + 4);
 
 	int res = ::compress2(buf.data() + 4, &len, data, nbytes, -1);
 
 	if (res != Z_OK) {
-		throw res;
+		throw std::runtime_error("compression failed (zlib status " + std::to_string(res) + ")");
 	}
 
 	// need to shrink buffer to appropriate size after compression
@@ -208,8 +267,8 @@ inline std::string encrypt(const std::string &input,
 	std::string compressed = compress(reinterpret_cast<const unsigned char *>(input.data()), input.size());
 
 	// Stage 2 - obfuscation
-	for (int i = 0; i < compressed.size(); i++) {
-		compressed[i] = compressed[i] ^ (compressed.size() - i);
+	for (std::size_t i = 0; i < compressed.size(); i++) {
+		compressed[i] ^= static_cast<unsigned char>(compressed.size() - i);
 	}
 
 	// Stage 3 - encryption
@@ -219,10 +278,10 @@ inline std::string encrypt(const std::string &input,
 				new CryptoPP::StringSink(encrypted)));
 
 	// Stage 4 - obfuscation
-	int length = encrypted.size();
+	const std::size_t length = encrypted.size();
 	std::string output(length, '\0');
-	for (int i = 0; i < encrypted.size(); i++) {
-		output[length + ~i] = encrypted[i] ^ (length - i * length);
+	for (std::size_t i = 0; i < length; i++) {
+		output[length - 1 - i] = encrypted[i] ^ static_cast<unsigned char>(length - i * length);
 	}
 
 	return output;
@@ -233,6 +292,9 @@ template <typename Algorithm>
 inline std::string encrypt2(const std::string &input,
                             const std::array<unsigned char, 16> &key,
                             const std::array<unsigned char, 16> &iv) {
+	if (input.size() > max_plaintext_bytes) {
+		throw std::length_error("plaintext input exceeds the 128 MiB limit");
+	}
 	typename CryptoPP::EAX<Algorithm>::Encryption e;
 	e.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
 
@@ -245,10 +307,10 @@ inline std::string encrypt2(const std::string &input,
 				new CryptoPP::StringSink(encrypted)));
 
 	// Stage 4 - obfuscation
-	int length = encrypted.size();
+	const std::size_t length = encrypted.size();
 	std::string output(length, '\0');
-	for (int i = 0; i < encrypted.size(); i++) {
-		output[length + ~i] = encrypted[i] ^ (length - i * length);
+	for (std::size_t i = 0; i < length; i++) {
+		output[length - 1 - i] = encrypted[i] ^ static_cast<unsigned char>(length - i * length);
 	}
 
 	return output;
@@ -281,15 +343,19 @@ inline std::string encrypt_nets(const std::string &input) {
 /// By cheking for the zlib headers in the correct position we can assess with
 /// encryption method was used.
 inline bool is_old_pt(const std::string &str) {
-	return (((unsigned char)(str[4] ^ (str.size() - 4)) == 0x78)
-			|| ((unsigned char)(str[5] ^ (str.size() - 5)) == 0x9C));
+	if (str.size() < 6) {
+		return false;
+	}
+	const auto method = static_cast<unsigned char>(str[4] ^ (str.size() - 4));
+	const auto flags = static_cast<unsigned char>(str[5] ^ (str.size() - 5));
+	return method == 0x78 && ((unsigned{method} << 8) | flags) % 31 == 0;
 }
 
 /// \brief Tweak pka/pkt file so it can be read by any version of Packet Tracer.
 inline std::string fix(std::string input) {
 	std::string clear = is_old_pt(input) ? decrypt_old(input) : decrypt_pka(input);
 
-	re2::RE2::GlobalReplace(&clear, R"(<VERSION>\d\.\d\.\d\.\d{4}</VERSION>)", R"(<VERSION>6.0.1.0000</VERSION>)");
+	re2::RE2::GlobalReplace(&clear, R"(<VERSION>\d+\.\d+\.\d+\.\d+</VERSION>)", R"(<VERSION>6.0.1.0000</VERSION>)");
 	return encrypt_pka(clear);
 }
 
