@@ -22,3 +22,6 @@ dist-ssr
 *.sln
 *.sw?
 node_modules/.vite/
+.test-build/
+dist-electron/
+release/
