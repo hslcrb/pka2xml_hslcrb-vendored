@@ -14,7 +14,8 @@
     "dev:renderer": "vite --mode renderer",
     "typecheck": "tsc --noEmit",
     "build:renderer": "npm run typecheck && vite build --mode renderer",
-    "package": "npm run build && node scripts/check-native.cjs && electron-builder --linux --x64"
+    "package": "npm run build && node scripts/check-native.cjs && electron-builder --linux --x64",
+    "test:electron": "node tests/electron-smoke.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",
