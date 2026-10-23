@@ -1,15 +1,92 @@
+#include <array>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "include/pka2xml.hpp"
 
-void die(const char *message) {
-  std::fprintf(stderr, "%s", message);
-  std::exit(1);
+namespace {
+
+std::string read_file(const std::string &path) {
+  std::ifstream input(path, std::ios::binary);
+  if (!input) {
+    throw std::runtime_error("cannot open input file: " + path);
+  }
+  constexpr std::size_t max_input_bytes = 129u * 1024u * 1024u;
+  std::array<char, 65536> buffer{};
+  std::string contents;
+  while (input) {
+    input.read(buffer.data(), buffer.size());
+    const auto count = static_cast<std::size_t>(input.gcount());
+    if (contents.size() > max_input_bytes - count) {
+      throw std::runtime_error("input exceeds the 129 MiB limit");
+    }
+    contents.append(buffer.data(), count);
+  }
+  if (!input.eof() || input.bad()) {
+    throw std::runtime_error("cannot read input file: " + path);
+  }
+  return contents;
+}
+
+void require_distinct_files(const char *input, const char *output) {
+  struct stat source{}, destination{};
+  if (::stat(input, &source) == 0 && ::stat(output, &destination) == 0 &&
+      source.st_dev == destination.st_dev && source.st_ino == destination.st_ino) {
+    throw std::runtime_error("input and output must be different files");
+  }
+}
+
+void write_file(const std::string &path, const std::string &contents) {
+  struct stat destination{};
+  if (::lstat(path.c_str(), &destination) == 0) {
+    if (!S_ISREG(destination.st_mode)) {
+      throw std::runtime_error("output must be a regular file: " + path);
+    }
+  } else if (errno != ENOENT) {
+    throw std::runtime_error("cannot inspect output file: " + path);
+  }
+
+  // Create beside the destination so rename is atomic on the same filesystem.
+  std::string temporary = path + ".pka2xml-XXXXXX";
+  const int descriptor = ::mkstemp(temporary.data());
+  if (descriptor < 0) {
+    throw std::runtime_error("cannot create output file: " + path + ": " + std::strerror(errno));
+  }
+  std::FILE *output = ::fdopen(descriptor, "wb");
+  if (!output) {
+    ::close(descriptor);
+    std::remove(temporary.c_str());
+    throw std::runtime_error("cannot open temporary output file: " + path);
+  }
+  try {
+    if (std::fwrite(contents.data(), 1, contents.size(), output) != contents.size()) {
+      throw std::runtime_error("cannot write output file: " + path);
+    }
+    const int close_result = std::fclose(output);
+    output = nullptr;
+    if (close_result != 0) {
+      throw std::runtime_error("cannot finish output file: " + path);
+    }
+    if (std::rename(temporary.c_str(), path.c_str()) != 0) {
+      throw std::runtime_error("cannot replace output file: " + path + ": " + std::strerror(errno));
+    }
+  } catch (...) {
+    if (output) {
+      std::fclose(output);
+    }
+    std::remove(temporary.c_str());
+    throw;
+  }
 }
 
 void help(std::FILE *stream)
@@ -36,6 +113,8 @@ examples:
 )");
 }
 
+}  // namespace
+
 int main(int argc, char *argv[]) {
 #ifdef HAS_UI
   if (argc > 1 && std::string(argv[1]) == "gui") {
@@ -61,66 +140,36 @@ int main(int argc, char *argv[]) {
   }
 
   try {
-    if (operation == "-d") {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      f_in.close();
-      std::ofstream f_out{argv[3]};
-      if (!f_out.is_open()) {
-        die("error opening output file");
-      }
-      f_out << pka2xml::decrypt_pka(input);
-      f_out.close();
-    } else if (operation == "-e") {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      f_in.close();
-      std::ofstream f_out{argv[3]};
-      if (!f_out.is_open()) {
-        die("error opening output file");
-      }
-      f_out << pka2xml::encrypt_pka(input);
-      f_out.close();
+    std::cout.exceptions(std::ios::badbit | std::ios::failbit);
+    if (operation == "-d" || operation == "-e" || operation == "-f") {
+      require_distinct_files(argv[2], argv[3]);
+      const std::string input = read_file(argv[2]);
+      const std::string output = operation == "-d" ? pka2xml::decrypt_pka(input) :
+          operation == "-e" ? pka2xml::encrypt_pka(input) : pka2xml::fix(input);
+      write_file(argv[3], output);
     } else if (operation == "-logs") {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
+      std::istringstream input(read_file(argv[2]));
       std::string line;
-      while (std::getline(f_in, line)) {
-        std::cout << pka2xml::decrypt_logs(line) << std::endl;
+      std::size_t line_number = 0;
+      while (std::getline(input, line)) {
+        ++line_number;
+        try {
+          std::cout << pka2xml::decrypt_logs(line) << '\n';
+        } catch (const std::exception &error) {
+          throw std::runtime_error("log line " + std::to_string(line_number) + ": " + error.what());
+        }
       }
-      f_in.close();
     } else if (operation == "-nets") {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      std::cout << pka2xml::decrypt_nets(input) << std::endl;
-      f_in.close();
+      std::cout << pka2xml::decrypt_nets(read_file(argv[2])) << '\n';
     } else if (operation == "--forge") {
-      std::ofstream f_out{argv[2]};
-      f_out << pka2xml::encrypt_nets("foobar~foobar~foobar~foobar~1700000000");
-      f_out.close();
-    } else if (operation == "-f") {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      f_in.close();
-      std::ofstream f_out{argv[3]};
-      f_out << pka2xml::fix(input);
-      f_out.close();
+      write_file(argv[2], pka2xml::encrypt_nets("foobar~foobar~foobar~foobar~1700000000"));
     }
-  } catch (int err) {
-    die("error during the processing of the files, make sure the input files are valid");
+    std::cout.flush();
+    return 0;
+  } catch (const std::exception &error) {
+    std::fprintf(stderr, "error: %s\n", error.what());
+  } catch (int error) {
+    std::fprintf(stderr, "error: invalid compressed input (zlib status %d)\n", error);
   }
+  return 1;
 }
