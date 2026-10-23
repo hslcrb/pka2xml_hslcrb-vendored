@@ -30,19 +30,19 @@
 
 **Files:** `main.cpp`, `include/pka2xml.hpp`, `Makefile`, `setup.sh`, `run_cli.sh`, `run_gui.sh`, and `tests/`.
 
-- [ ] Reproduce baseline CLI, malformed input, and build failures.
-- [ ] Add focused regression tests for argument parsing, truncated input, round trips, and output preservation.
-- [ ] Fix root causes and verify with a source-built binary.
-- [ ] Document build requirements, run tests, commit and push each coherent fix.
+- [x] Reproduce baseline CLI, malformed input, and build failures.
+- [x] Add focused regression tests for argument parsing, truncated input, round trips, and output preservation.
+- [x] Fix root causes and verify with a source-built binary.
+- [x] Document build requirements, run tests, commit and push each coherent fix.
 
 ## Task 2: Desktop
 
 **Files:** `gui/src/`, `gui/electron/`, desktop configuration and tests.
 
-- [ ] Verify baseline TypeScript/build and inspect IPC/resource resolution.
-- [ ] Fix process execution, dialogs, state recovery, and packaging paths.
-- [ ] Apply the glass workshop interface with keyboard access and clear status.
-- [ ] Run build/lint and focused integration checks, commit and push incrementally.
+- [x] Verify baseline TypeScript/build and inspect IPC/resource resolution.
+- [x] Fix process execution, dialogs, state recovery, and packaging paths.
+- [x] Apply the glass workshop interface with keyboard access and clear status.
+- [x] Run build/lint and focused integration checks, commit and push incrementally.
 
 ## Task 3: Browser runtime
 
@@ -50,26 +50,26 @@
 
 **Interface:** Preserve `runPka2xml(inputData: Uint8Array, args: string[]): Promise<ConvertResult>` with `{ success, output?, logs, exitCode }`; `loadWasm()` becomes the worker readiness operation.
 
-- [ ] Reproduce engine startup, first conversion, repeated conversion, and error recovery.
-- [ ] Isolate compilation/conversion in a lazy worker and bound job lifetime and input size.
-- [ ] Ensure validated arguments, correct input/output paths, cleanup, and explicit failures.
-- [ ] Verify real WASM results against native fixtures and record measurements.
+- [x] Reproduce engine startup, first conversion, repeated conversion, and error recovery.
+- [x] Isolate compilation/conversion in a lazy worker and bound job lifetime and input size.
+- [x] Ensure validated arguments, correct input/output paths, cleanup, and explicit failures.
+- [x] Verify real WASM results against native fixtures and record measurements.
 
 ## Task 4: Browser experience and introduction
 
 **Files:** `web/app/`, `web/components/`, UI-specific helpers/assets and frontend checks.
 
-- [ ] Read local Next.js documentation and baseline frontend errors.
-- [ ] Build `/` introduction and `/workbench` with coherent brand and functional conversion/terminal flows.
-- [ ] Add responsive layouts, useful validation, keyboard focus, and reduced motion.
-- [ ] Run production build, lint/type checks, browser flows and screenshots; commit and push incrementally.
+- [x] Read local Next.js documentation and baseline frontend errors.
+- [x] Build `/` introduction and `/workbench` with coherent brand and functional conversion/terminal flows.
+- [x] Add responsive layouts, useful validation, keyboard focus, and reduced motion.
+- [x] Run production build, lint/type checks, browser flows and screenshots; commit and push incrementally.
 
 ## Task 5: Open-source handoff and integration
 
 **Files:** root documentation, `docs/`, `brand/`, `.github/`, `agent-brain/`.
 
-- [ ] Record factual dependency provenance and upstream license attribution.
-- [ ] Explain setup, supported platforms, contribution process, structure and philosophy.
-- [ ] Merge component branches with merge commits, pushing every merge.
-- [ ] Run integrated checks and independent review; record exact results and limitations.
+- [x] Record factual dependency provenance and upstream license attribution.
+- [x] Explain setup, supported platforms, contribution process, structure and philosophy.
+- [x] Merge component branches with merge commits, pushing every merge.
+- [x] Run integrated checks and independent review; record exact results and limitations.
 - [ ] Open a reviewable pull request with branch/commit links and verification evidence.
