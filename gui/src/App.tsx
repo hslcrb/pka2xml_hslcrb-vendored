@@ -1,165 +1,37 @@
-import { useState } from 'react'
-import {
-  FileSymlink,
-  Settings,
-  Terminal,
-  Activity,
-  ShieldCheck,
-  FolderOpen
-} from 'lucide-react'
+import { useWorkbench } from './useWorkbench'
+import { operations, type Operation } from '../shared/contracts'
 
 function App() {
-  const [inputPath, setInputPath] = useState('')
-  const [outputPath, setOutputPath] = useState('')
-  const [logs, setLogs] = useState<string[]>([])
-  const [status, setStatus] = useState('시스템 준비됨')
-  const [isLoading, setIsLoading] = useState(false)
-
-  const addLog = (msg: string) => {
-    setLogs(prev => [...prev.slice(-100), `[${new Date().toLocaleTimeString()}] ${msg}`])
-  }
-
-  const handleOpenFile = async (type: 'input' | 'output') => {
-    const filters = type === 'input'
-      ? [{ name: 'Packet Tracer Files', extensions: ['pka', 'pkt', 'xml'] }]
-      : [{ name: 'Output Files', extensions: ['xml', 'pka', 'pkt'] }]
-
-    const path = await window.electronAPI.openFile({
-      properties: ['openFile'],
-      filters
-    })
-
-    if (path) {
-      if (type === 'input') setInputPath(path)
-      else setOutputPath(path)
-      addLog(`${type === 'input' ? '입력' : '출력'} 파일 선택됨: ${path}`)
-    }
-  }
-
-  const runCommand = async (action: 'decrypt' | 'encrypt' | 'fix' | 'forge') => {
-    const isForge = action === 'forge'
-
-    if (!isForge && !inputPath) {
-      addLog('오류: 입력 파일 경로가 필요합니다.')
-      return
-    }
-    if (!outputPath) {
-      addLog('오류: 출력 파일 경로가 필요합니다.')
-      return
-    }
-
-    setIsLoading(true)
-    setStatus(`${action.toUpperCase()} 실행 중...`)
-    addLog(`작업 시작: ${action}`)
-
-    let args: string[] = []
-    if (action === 'decrypt') args = ['-d', inputPath, outputPath]
-    else if (action === 'encrypt') args = ['-e', inputPath, outputPath]
-    else if (action === 'fix') args = ['-f', inputPath, outputPath]
-    else if (action === 'forge') args = ['--forge', outputPath]
-
-    const result = await window.electronAPI.execute(args)
-
-    if (result.success) {
-      addLog(`${action} 성공!`)
-      if (result.stdout) addLog(`결과: ${result.stdout}`)
-      setStatus('작업 완료')
-    } else {
-      addLog(`오류 발생: ${result.error || result.stderr}`)
-      setStatus('작업 실패')
-    }
-    setIsLoading(false)
-  }
-
-  const runGraph = async () => {
-    if (!inputPath) {
-      addLog('오류: 그래프를 그리려면 XML 파일(입력)이 필요합니다.')
-      return
-    }
-    addLog('그래프 시각화 실행 중...')
-    const result = await window.electronAPI.execute(['GRAPH_MODE', inputPath])
-    if (!result.success) addLog(`그래프 실행 실패: ${result.error}`)
-  }
-
+  const work = useWorkbench()
   return (
     <div className="container">
-      <header>
-        <h1>pka2xml <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: 400 }}>GUI Premium</span></h1>
-        <p className="subtitle">Cisco Packet Tracer 파일 리버싱 및 시각화 시스템</p>
-      </header>
-
+      <header><h1>pka2xml · 투명한 작업실</h1><p>파일 속 네트워크를, 조금 더 선명하게.</p></header>
       <main className="glass-card">
-        <div className="input-group">
-          <label className="label">입력 파일 (.pka / .pkt / .xml)</label>
-          <div className="file-input-container">
-            <input
-              type="text"
-              placeholder="파일을 선택하거나 경로를 입력하세요..."
-              value={inputPath}
-              onChange={(e) => setInputPath(e.target.value)}
-            />
-            <button className="secondary" onClick={() => handleOpenFile('input')}>
-              <FolderOpen size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="input-group">
-          <label className="label">출력 파일 경로</label>
-          <div className="file-input-container">
-            <input
-              type="text"
-              placeholder="변환된 파일이 저장될 경로..."
-              value={outputPath}
-              onChange={(e) => setOutputPath(e.target.value)}
-            />
-            <button className="secondary" onClick={() => handleOpenFile('output')}>
-              <FolderOpen size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="actions">
-          <button onClick={() => runCommand('decrypt')} disabled={isLoading}>
-            <FileSymlink size={18} style={{ marginRight: '8px' }} /> 복호화 (Decrypt)
-          </button>
-          <button onClick={() => runCommand('encrypt')} disabled={isLoading}>
-            <ShieldCheck size={18} style={{ marginRight: '8px' }} /> 암호화 (Encrypt)
-          </button>
-          <button className="secondary" onClick={() => runCommand('fix')} disabled={isLoading}>
-            <Settings size={18} style={{ marginRight: '8px' }} /> 버전 패치 (Fix)
-          </button>
-          <button className="secondary" onClick={() => runCommand('forge')} disabled={isLoading}>
-            <Activity size={18} style={{ marginRight: '8px' }} /> 인증 우회 (Forge)
-          </button>
-        </div>
-
-        <div style={{ marginTop: '1.5rem' }}>
-          <button
-            style={{ width: '100%', background: 'linear-gradient(to right, #8b5cf6, #3b82f6)' }}
-            onClick={runGraph}
-            disabled={isLoading}
-          >
-            <Activity size={18} style={{ marginRight: '8px' }} /> 토폴로지 그래프 시각화
-          </button>
-        </div>
+        {!work.bridgeAvailable && <p role="status">화면 미리보기입니다. 파일 변환은 데스크톱 앱에서 사용할 수 있습니다.</p>}
+        {work.engine && <p>{work.engine.message}</p>}
+        <label htmlFor="operation">작업 선택</label>
+        <select id="operation" value={work.operation} onChange={event => work.setOperation(event.target.value as Operation)} disabled={work.busy}>
+          {operations.map(operation => <option key={operation}>{operation}</option>)}
+        </select>
+        {work.needsInput && <div className="input-group"><label htmlFor="input">원본 파일</label><div className="file-input-container">
+          <input id="input" type="text" value={work.inputPath} readOnly placeholder="파일을 선택해 주세요" />
+          <button onClick={() => void work.chooseFile('input')} disabled={work.busy || !work.engine?.available}>파일 선택</button>
+        </div></div>}
+        {work.needsOutput && <div className="input-group"><label htmlFor="output">저장 위치</label><div className="file-input-container">
+          <input id="output" type="text" value={work.outputPath} readOnly placeholder="새 결과 파일의 위치" />
+          <button onClick={() => void work.chooseFile('output')} disabled={work.busy || !work.engine?.available}>저장 위치 선택</button>
+        </div></div>}
+        <button onClick={() => void work.run()} disabled={!work.canRun}>변환 시작</button>
+        {work.status === 'running' && <button onClick={() => void work.cancel()}>취소</button>}
+        {work.result?.success && work.result.outputPath && <button onClick={() => void work.reveal()}>결과 폴더 열기</button>}
+        <p role="status">{work.status}</p>
+        {work.notice && <p role={work.status === 'error' ? 'alert' : 'status'}>{work.notice}</p>}
+        {work.result?.success && work.result.stdout && <pre>{work.result.stdout.slice(0, 64000)}</pre>}
       </main>
-
-      <div className="log-area">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#94a3b8' }}>
-          <Terminal size={14} /> <span>실행 로그</span>
-        </div>
-        {logs.length === 0 ? (
-          <div style={{ color: '#475569', fontStyle: 'italic' }}>로그 데이터가 없습니다.</div>
-        ) : (
-          logs.map((log, i) => <div key={i}>{log}</div>)
-        )}
-      </div>
-
-      <footer className="status-bar">
-        <div>상태: <span style={{ color: '#e2e8f0' }}>{status}</span></div>
-        <div className="badge">v1.0.0-PRO</div>
-      </footer>
+      <section className="log-area" aria-label="작업 기록">
+        {work.logs.map(entry => <div key={entry.id}>[{entry.time}] {entry.text}</div>)}
+      </section>
+      <footer>모든 변환은 이 컴퓨터 안에서 이루어집니다. 토폴로지 시각화는 별도 graph.py 도구를 사용해 주세요.</footer>
     </div>
   )
 }

@@ -4,6 +4,27 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { binaryPathFor, buildArguments, executeConversion, validateRequest } from '../electron/converter.js'
+import { isTrustedFrame, suggestedOutput, validateOperation } from '../electron/policy.js'
+
+test('IPC rejects subframes, lookalike origins and unrelated local files', () => {
+  const expected = 'http://localhost:5173/'
+  assert.equal(isTrustedFrame(expected, expected, true), true)
+  assert.equal(isTrustedFrame(expected, expected, false), false)
+  assert.equal(isTrustedFrame('http://localhost:5173.evil.test/', expected, true), false)
+  assert.equal(isTrustedFrame('http://localhost:5174/', expected, true), false)
+  assert.equal(isTrustedFrame('file:///tmp/other.html', 'file:///app/index.html', true), false)
+  assert.equal(isTrustedFrame('file:///app/index.html#help', 'file:///app/index.html', true), true)
+  assert.equal(isTrustedFrame('not a url', expected, true), false)
+  assert.throws(() => validateOperation({ operation: 'decrypt' }))
+  assert.throws(() => validateOperation('GRAPH_MODE'))
+})
+
+test('save suggestions match the selected conversion and never replace the input name', () => {
+  assert.equal(suggestedOutput('decrypt', '/work/한글.pka'), '/work/한글.xml')
+  assert.equal(suggestedOutput('encrypt', '/work/network.xml'), '/work/network.pka')
+  assert.equal(suggestedOutput('fix', '/work/network.pkt'), '/work/network.compatible.pkt')
+  assert.equal(suggestedOutput('decrypt', '/work/network.xml'), '/work/network.converted.xml')
+})
 
 test('validates a narrow operation and absolute paths before starting any process', () => {
   for (const invalid of [null, [], {}, { operation: 'GRAPH_MODE' }, { operation: 'decrypt', inputPath: 'relative.pka', outputPath: '/tmp/result.xml' }, { operation: 'forge', outputPath: '/tmp/a\0b' }]) {
