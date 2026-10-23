@@ -21,13 +21,12 @@ std::string read_file(const std::string &path) {
   if (!input) {
     throw std::runtime_error("cannot open input file: " + path);
   }
-  constexpr std::size_t max_input_bytes = 129u * 1024u * 1024u;
   std::array<char, 65536> buffer{};
   std::string contents;
   while (input) {
     input.read(buffer.data(), buffer.size());
     const auto count = static_cast<std::size_t>(input.gcount());
-    if (contents.size() > max_input_bytes - count) {
+    if (contents.size() > pka2xml::max_encoded_bytes - count) {
       throw std::runtime_error("input exceeds the 129 MiB limit");
     }
     contents.append(buffer.data(), count);
