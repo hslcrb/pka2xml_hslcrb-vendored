@@ -2,14 +2,19 @@
   "name": "gui",
   "private": true,
   "version": "1.0.0",
-  "description": "Premium GUI for Packet Tracer pka2xml file converter",
+  "description": "A transparent local workshop for Packet Tracer files",
   "author": "Rhee Hose",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "test": "tsc -p tsconfig.tests.json && node .test-build/tests/converter.test.js",
+    "build": "npm run typecheck && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:renderer": "vite --mode renderer",
+    "typecheck": "tsc --noEmit",
+    "build:renderer": "npm run typecheck && vite build --mode renderer",
+    "package": "npm run build && node scripts/check-native.cjs && electron-builder --linux --x64"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",
