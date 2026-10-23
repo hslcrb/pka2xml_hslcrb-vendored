@@ -63,6 +63,8 @@ make -C "$BUILD_ROOT/sources/re2" \
   obj/libre2.a -j"$JOBS"
 
 printf 'Linking the browser engine with exception handling and worker support.\n'
+# read_file uses a 64 KiB buffer; the default 64 KiB WASM stack is too small.
+# Keep a bounded 1 MiB stack and trap overflow before it corrupts runtime state.
 em++ "$PROJECT_ROOT/main.cpp" \
   -I"$PROJECT_ROOT" -I"$BUILD_ROOT/sources" -I"$BUILD_ROOT/sources/re2" \
   "$BUILD_ROOT/sources/cryptopp/libcryptopp.a" \
@@ -71,6 +73,7 @@ em++ "$PROJECT_ROOT/main.cpp" \
   -sMODULARIZE=1 -sEXPORT_NAME=createPka2xml \
   -sEXPORTED_FUNCTIONS='["_main"]' \
   -sEXPORTED_RUNTIME_METHODS='["FS","callMain"]' \
+  -sSTACK_SIZE=1048576 -sSTACK_OVERFLOW_CHECK=2 \
   -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=536870912 \
   -sINVOKE_RUN=0 -sEXIT_RUNTIME=0 -sENVIRONMENT=web,worker \
   -o "$OUT_DIR/pka2xml.js"
