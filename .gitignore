@@ -2,6 +2,9 @@
 /gui/dist
 /gui/dist-electron
 .setup_done
+.build/
+pka2xml.building
+tests/__pycache__/
 
 # Local workspaces and reproducible build output
 .worktrees/

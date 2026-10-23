@@ -1,23 +1,16 @@
-#!/bin/bash
-# pka2xml CLI Runner
+#!/usr/bin/env bash
+set -euo pipefail
 
-if [ ! -f .setup_done ]; then
-    echo "⚠️  잠깐! 프로젝트 초기 설정(재조립)이 되지 않은 것 같아."
-    echo "명령어 한 줄이면 되니까 먼저 이걸 실행해줘: ./setup.sh"
-    echo "--------------------------------------------------------"
-    read -p "지금 바로 초기 설정을 진행할까? (y/n): " choice
-    if [ "$choice" == "y" ] || [ "$choice" == "Y" ]; then
-        chmod +x setup.sh && ./setup.sh
-    else
-        echo "❌ 초기 설정 없이는 CLI를 실행할 수 없어. 나중에 다시 와!"
-        exit 1
-    fi
-fi
-
-# pka2xml 바이너리 실행 (인자값 전달)
-if [ -f ./pka2xml ]; then
-    ./pka2xml "$@"
-else
-    echo "❌ 에러: pka2xml 바이너리가 없어. ./setup.sh 를 다시 확인해봐!"
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ ! -x "$PROJECT_DIR/pka2xml" || ! -f "$PROJECT_DIR/.setup_done" ]]; then
+    echo "Native build is not ready. Run setup.sh in: $PROJECT_DIR" >&2
     exit 1
 fi
+current_state="$(cd "$PROJECT_DIR" && cksum main.cpp include/pka2xml.hpp Makefile setup.sh pka2xml)"
+if [[ "$current_state" != "$(cat "$PROJECT_DIR/.setup_done")" ]]; then
+    echo "Native sources or binary changed. Rebuild with setup.sh in: $PROJECT_DIR" >&2
+    exit 1
+fi
+
+# Keep the caller's directory so relative input/output paths retain their meaning.
+exec "$PROJECT_DIR/pka2xml" "$@"
