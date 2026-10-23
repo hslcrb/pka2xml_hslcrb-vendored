@@ -6,7 +6,7 @@
 
 | 브랜치 | 확인한 HEAD | 담당 범위 | 통합 상태 |
 | --- | --- | --- | --- |
-| [`master`](https://github.com/hslcrb/pka2xml_hslcrb-vendored/tree/master) | [bb58d79b](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/bb58d79bbf8c331d58ee212e950acc903efa5c3c) | 기존 공개 기준 스냅샷 | 변경하지 않음. integration 검증은 완료했고 master 대상 PR 생성을 준비함. |
+| [`master`](https://github.com/hslcrb/pka2xml_hslcrb-vendored/tree/master) | [bb58d79b](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/bb58d79bbf8c331d58ee212e950acc903efa5c3c) | 기존 공개 기준 스냅샷 | 변경하지 않음. integration 검증 완료; PR #1에서 병합 검토 중. |
 | [`chatgpt/glass/core`](https://github.com/hslcrb/pka2xml_hslcrb-vendored/tree/chatgpt/glass/core) | [6f8568c9](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/6f8568c98a5f7b5b76acb654b20c5d4faaafc36c) | 네이티브 엔진, 고정 의존성, 빌드·실행, 토폴로지 | 최종 HEAD 전체가 integration의 조상. |
 | [`chatgpt/glass/desktop`](https://github.com/hslcrb/pka2xml_hslcrb-vendored/tree/chatgpt/glass/desktop) | [68183b68](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/68183b686386f74632073392423b570806cf7c9a) | Electron 변환·보안 경계·화면·검사 | 최종 HEAD 전체가 integration의 조상. |
 | [`chatgpt/glass/web`](https://github.com/hslcrb/pka2xml_hslcrb-vendored/tree/chatgpt/glass/web) | [e588e32f](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/e588e32f70768022d59c9983da0a5c5472ab582c) | 웹 소개·작업실·콘솔·접근성 | 최종 HEAD 전체가 integration의 조상. |
@@ -25,7 +25,7 @@
 
 작업 브랜치는 `chatgpt/` 아래에 두었다. 각 원자적 변경은 영어 접두사와 한국어 제목으로 커밋한 직후 GitHub에 게시했다. API 게시 후 커밋 메타데이터에 따라 SHA가 달라지는 경우, 원격 트리 일치를 확인하고 로컬 브랜치를 게시된 커밋에 맞췄다. 이 기록은 게시 전 임시 SHA 대신 원격 SHA를 연결한다.
 
-이 스냅샷에서 구현·통합·최종 검증은 완료했고, 기록 문서 게시와 master 대상 PR은 남아 있다. PR 생성·병합 또는 브랜치 삭제 완료를 이 문서가 뜻하지 않는다.
+구현·통합·최종 검증을 완료했다. 스냅샷 이후 문서를 게시하고 [PR #1](https://github.com/hslcrb/pka2xml_hslcrb-vendored/pull/1)을 생성했다. PR은 master 대상으로 열려 있으며 master 병합과 브랜치 삭제는 수행하지 않았다.
 
 ## 역사 분석 한계
 

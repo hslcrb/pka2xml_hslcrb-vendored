@@ -4,7 +4,7 @@
 
 이 문서는 완료한 변경을 실제 Git 커밋과 검증 근거에 연결한다. 설계는 [Glass workshop 명세](../docs/superpowers/specs/2026-10-23-glass-workshop.md), 실행 순서는 [구현 계획](../docs/superpowers/plans/2026-10-23-glass-upgrade.md)을 따른다. 각 작은 커밋은 영어 접두사와 한국어 제목으로 작성하고, 다음 커밋 전에 GitHub에 게시했다. 아래 SHA는 게시 후 확인한 원격 커밋이며 임시 로컬 SHA를 사용하지 않는다.
 
-**현재 상태:** core·desktop·web의 모든 브랜치 끝점이 integration에 포함되어 있다. 기능 구현과 아래 최종 검증은 완료했다. 이 기록 작성 시점에는 마무리 문서 게시와 master 대상 PR이 남아 있다. 브랜치별 정확한 상태는 [branches.md](branches.md)를 참고한다.
+**현재 상태:** core·desktop·web의 모든 브랜치 끝점이 integration에 포함되어 있다. 기능 구현과 아래 최종 검증은 완료했다. 마무리 기록을 게시하고 [PR #1](https://github.com/hslcrb/pka2xml_hslcrb-vendored/pull/1)을 생성했다. master 병합은 PR 검토 단계에 있다. 브랜치별 정확한 상태는 [branches.md](branches.md)를 참고한다.
 
 ## 1. 설계·브랜드·문서 기반
 
@@ -81,7 +81,7 @@
 
 ## 7. 남은 범위와 역사 분석 한계
 
-- 이 기록의 기준 시점에는 master 반영과 PR 완료가 남아 있다. 최종 문서 게시 커밋은 이 문서 자체의 후속 기록이므로 위 31개 커밋 목록에 포함하지 않는다.
+- 구현 기준 스냅샷 이후 문서 게시와 PR 생성을 완료했다. master 반영은 PR 검토 단계에 있다. 최종 문서 게시 커밋은 이 문서 자체의 후속 기록이므로 위 31개 커밋 목록에 포함하지 않는다.
 - Linux x86-64와 Chromium의 관측 결과다. Windows/macOS 네이티브 실행, 모든 Packet Tracer 버전, 배포용 설치 패키지의 설치 과정은 검증했다고 주장하지 않는다.
 - 초기 저장소는 depth 1 체크아웃이었다. 기준 커밋 [bb58d79b](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/bb58d79bbf8c331d58ee212e950acc903efa5c3c) 이전의 전체 변경·저작 경위를 이 로컬 기록으로 복원할 수 없다. 분석 범위는 그 스냅샷과 이후 실제 31개 커밋(병합 7개)이다.
 - 의존성은 커밋으로 고정된 Git 서브모듈이다. 오프라인 준비에는 서브모듈 소스·도구체인·패키지를 미리 확보해야 한다. [의존성](../docs/dependencies.md), [네이티브 빌드](../docs/native-build.md), [산출물 출처](../docs/runtime-artifacts.md)를 함께 참고한다.
@@ -89,3 +89,5 @@
 ## 8. 화면과 검증 기록
 
 [51ae6a2d](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/51ae6a2daef76dab77ef68b418d93ab0605a1b94)에 실제 웹·Electron 화면 4장, 환경 버전, 통합 실패 원인과 수정, 시험 명령 및 한계를 게시했다. [최종 검증 보고서](../docs/verification-2026-10-23.md)에 수치와 재현 경로가 있다.
+
+[96305dbb](https://github.com/hslcrb/pka2xml_hslcrb-vendored/commit/96305dbb2151350015e8185c827a412cfbd3f594)에 작업 원장·브랜치 전수 확인·완료 계획을 게시했다. 최종 인계는 [PR #1](https://github.com/hslcrb/pka2xml_hslcrb-vendored/pull/1)이며, 이 마지막 기록 갱신도 영어 접두사·한국어 제목으로 커밋 후 게시한다.
