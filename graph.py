@@ -1,202 +1,124 @@
-import xml.etree.ElementTree as ET
-import os
-import re
+"""Export a Packet Tracer XML network to DOT, optionally rendering a PNG."""
+
+import argparse
+from collections import Counter
+from ipaddress import IPv4Network
+import json
+from pathlib import Path
+import subprocess
 import sys
-import string
+import xml.etree.ElementTree as ET
 
-if len(sys.argv) < 2: exit(1)
 
-filepath = sys.argv[1]
+def value(node, path):
+    return (node.findtext(path) or "").strip()
 
-with open(filepath) as f:
-  data = f.read()
 
-data = re.sub(f'[^{re.escape(string.printable)}]', '', data)
+def quote(text):
+    return json.dumps(str(text), ensure_ascii=False)
 
-root = ET.fromstring(data)
 
-def get_value(node, path):
-  v = node.find(path)
-  return v.text if v is not None else ''
-
-class Port:
-
-  def __init__(self, node, index, parent_type, dev_name = ''):
-    self.type   = get_value(node, 'TYPE')
-    self.mac    = get_value(node, 'MACADDRESS')
-    self.ip     = get_value(node, 'IP')
-    self.sub    = get_value(node, 'SUBNET')
-    self.dhcp   = get_value(node, 'PORT_DHCP_ENABLE')
-
-    if self.dhcp == 'true':
-      self.ip = '<DHCP>'
-
-    main_switch = {
-      'Pc': 1,
-      'Pda': 1,
-      'Cloud': 1,
-      'Laptop': 1,
-      'Printer': 1,
-      'Server': 1,
-
-      'AccessPoint': 2,
-      'DslModem': 2,
-      'Router': 2,
-      'Sniffer': 2,
-      'Switch': 2,
-      'WirelessRouter': 2,
-    }
-
-    switch = {
-      1: {
-        'eAccessPointWirelessN': '{}',
-        'eCopperCoaxial': '{}',
-        'eCopperEthernet': 'Ethernet{}',
-        'eCopperEthernet': 'FastEthernet{}',
-        'eCopperFastEthernet': 'FastEthernet{}',
-        'eCopperGigabitEthernet': 'GigabitEthernet{}',
-        'eHostWirelessN': '{}',
-        'eModem': '{}',
-        'eSerial': '{}',
-      },
-      2: {
-        'eAccessPointWirelessN': '{}',
-        'eCopperCoaxial': '{}',
-        'eCopperEthernet': 'Ethernet{}',
-        'eCopperFastEthernet': 'FastEthernet0/{}',
-        'eCopperGigabitEthernet': 'GigabitEthernet0/{}',
-        'eHostWirelessN': '{}',
-        'eModem': '{}',
-        'eSerial': '{}',
-      },
-    }
-
-    if self.type:
-      self.name = switch[main_switch[parent_type]][self.type].format(index)
-
-    if dev_name != '':
-      self.name = dev_name
-
-  def __repr__(self):
-    return self.name if self.name else '<Unnamed>'
-
-class Ports:
-
-  def __init__(self, node):
-    self.ports = []
-    count = {}
-
-    lines = node.findall('ENGINE/RUNNINGCONFIG/LINE')
+def ports_for(device):
     names = []
-    for i, j in enumerate(lines):
-        if 'interface' in j.text:
-            names.append(j.text.split(' ')[1])
-
-    for i, p in enumerate(node.findall('ENGINE/MODULE/SLOT/MODULE/PORT')):
-      v = get_value(p, 'TYPE')
-      if count.get(v, None) is None:
-        count[v] = 0
-      else:
-        count[v] += 1
-      if len(names):
-        self.ports.append(Port(p, count[v], node.find('ENGINE/TYPE').text, names[i]))
-      else:
-        self.ports.append(Port(p, count[v], node.find('ENGINE/TYPE').text))
-    print(count)
-
-  def by_name(self, name):
-    # TODO map names to ports for close to linear access
-    for device in self.ports:
-      if device.name == name:
-        return device
-
-
-class Device:
-
-  def __init__(self, node):
-    self.node = node
-    self.type = get_value(node, 'ENGINE/TYPE')
-    self.name = get_value(node, 'ENGINE/NAME')
-    self.id   = get_value(node, 'ENGINE/SAVE_REF_ID')
-
-    self.ports = Ports(node)
+    for line in device.findall("ENGINE/RUNNINGCONFIG/LINE"):
+        parts = (line.text or "").strip().split()
+        if len(parts) > 1 and parts[0] == "interface":
+            names.append(parts[1])
+    host = value(device, "ENGINE/TYPE") in {"Pc", "Pda", "Cloud", "Laptop", "Printer", "Server"}
+    formats = {
+        "eCopperEthernet": "Ethernet{}",
+        "eCopperFastEthernet": "FastEthernet{}" if host else "FastEthernet0/{}",
+        "eCopperGigabitEthernet": "GigabitEthernet{}" if host else "GigabitEthernet0/{}",
+    }
+    counts, ports = Counter(), {}
+    for index, port in enumerate(device.findall("ENGINE/MODULE//PORT")):
+        kind = value(port, "TYPE")
+        number = counts[kind]
+        counts[kind] += 1
+        fallback = formats.get(kind, (kind or "Port") + "{}").format(number)
+        name = value(port, "NAME") or (names[index] if index < len(names) else fallback)
+        address = "DHCP" if value(port, "PORT_DHCP_ENABLE") == "true" else value(port, "IP")
+        mask = value(port, "SUBNET")
+        if mask:
+            try:
+                mask = str(IPv4Network("0.0.0.0/" + mask).prefixlen)
+            except ValueError:
+                pass
+        label = address + ("/" + mask if address and mask and address != "DHCP" else "")
+        ports[name] = label
+        # Host links commonly omit the zero in names such as FastEthernet0.
+        if number == 0 and name.endswith("0") and "/" not in name:
+            ports.setdefault(name[:-1], label)
+    return ports
 
 
-class Devices:
+def build_dot(root):
+    network = root if root.tag == "NETWORK" else root.find("NETWORK")
+    if network is None:
+        network = root.find("PACKETTRACER5/NETWORK")
+    if network is None:
+        raise ValueError("XML has no supported Packet Tracer NETWORK element")
+    devices = network.findall("DEVICES/DEVICE")
+    by_id = {}
+    for index, device in enumerate(devices):
+        identifier = value(device, "ENGINE/SAVE_REF_ID") or value(device, "SAVE_REF_ID")
+        if identifier:
+            by_id[identifier] = index
 
-  def __init__(self, nodes):
-    self.devices = [Device(d) for d in nodes.findall('PACKETTRACER5/NETWORK/DEVICES/DEVICE')]
-    #self.devices = [Device(d) for d in nodes.findall('NETWORK/DEVICES/DEVICE')]
+    def resolve(reference):
+        if reference in by_id:
+            return by_id[reference]
+        try:
+            index = int(reference)
+            return index if 0 <= index < len(devices) else None
+        except ValueError:
+            return None
 
-  def by_id(self, id):
-    # TODO map id to devices for close to linear access
-    for device in self.devices:
-      if device.id == id:
-        return device
+    lines = ['graph G {', '  node [shape=box, style=rounded];', '  graph [pad="1", ranksep="1.5"];']
+    device_ports = [ports_for(device) for device in devices]
+    for index, device in enumerate(devices):
+        name = value(device, "ENGINE/NAME") or f"Device {index + 1}"
+        lines.append(f'  "device_{index}" [label={quote(name)}];')
+    for link in network.findall("LINKS/LINK"):
+        source, target = resolve(value(link, "CABLE/FROM")), resolve(value(link, "CABLE/TO"))
+        if source is None or target is None:
+            print("warning: skipped a link with an unknown device reference", file=sys.stderr)
+            continue
+        port_names = [(port.text or "").strip() for port in link.findall("CABLE/PORT")]
+        port_names += [""] * (2 - len(port_names))
+        source_label = device_ports[source].get(port_names[0], "")
+        target_label = device_ports[target].get(port_names[1], "")
+        lines.append(f'  "device_{source}" -- "device_{target}" [taillabel={quote(source_label)}, headlabel={quote(target_label)}];')
+    return "\n".join([*lines, "}", ""])
 
-  def by_index(self, index):
-    return self.devices[int(index)]
 
-devices = Devices(root)
-
-def traverse(nodes, fn, depth = 0):
-  for node in nodes:
-    fn(node, depth)
-    if node.findall('NODE'):
-      traverse(node.findall('NODE'), fn, depth + 1)
-
-comparisons = root.findall('COMPARISONS/NODE')
-setup = root.findall('INITIALSETUP/NODE')
-
-def printer(node, depth):
-  if node.find('NAME').attrib['checkType'] == '1':
-    print(' ' * depth + node.find('NAME').text, node.find('NAME').attrib['nodeValue'])
-  if node.find('NAME').attrib['checkType'] == '2':
-    print(' ' * depth + node.find('NAME').text, node.find('NAME').attrib['nodeValue'])
-
-traverse(comparisons, printer)
-traverse(setup, printer)
-
-links = root.find('PACKETTRACER5/NETWORK/LINKS')
-#links = root.find('NETWORK/LINKS')
-
-with open('network.dot', 'w') as f:
-  f.write('graph G {\n')
-  f.write('\tnode [style=rounded,shape=record];\n')
-  f.write('\tlayout=twopi;\n')
-  f.write('\tgraph [pad="1", ranksep="1.5"];\n\n')
-  for link in links:
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", type=Path, help="decrypted Packet Tracer XML")
+    parser.add_argument("--dot", type=Path, default=Path("network.dot"), help="DOT output path")
+    parser.add_argument("--png", type=Path, default=Path("network.png"), help="PNG output path")
+    parser.add_argument("--no-render", action="store_true", help="write DOT only; no Graphviz installation required")
+    args = parser.parse_args(argv)
     try:
-      fr = devices.by_index(link.find('CABLE/FROM').text)
-      to = devices.by_index(link.find('CABLE/TO').text)
-    except:
-      fr = devices.by_id(link.find('CABLE/FROM').text)
-      to = devices.by_id(link.find('CABLE/TO').text)
+        paths = [args.input.resolve(), args.dot.resolve()]
+        if not args.no_render:
+            paths.append(args.png.resolve())
+        if len(set(paths)) != len(paths):
+            raise ValueError("input and output paths must be different")
+        text = build_dot(ET.parse(args.input).getroot())
+        args.dot.write_text(text, encoding="utf-8")
+        if not args.no_render:
+            try:
+                subprocess.run(["dot", "-Tpng", str(args.dot), "-o", str(args.png)], check=True)
+            except FileNotFoundError:
+                raise ValueError(f"Graphviz 'dot' is not installed; DOT saved to {args.dot}. Use --no-render for DOT only") from None
+            except subprocess.CalledProcessError as error:
+                raise ValueError(f"Graphviz failed with status {error.returncode}; DOT saved to {args.dot}") from error
+        return 0
+    except (OSError, ValueError, ET.ParseError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
 
-    fr_port = fr.ports.by_name(link.findall('CABLE/PORT')[0].text)
-    to_port = to.ports.by_name(link.findall('CABLE/PORT')[1].text)
 
-    if fr_port is None:
-      print(fr.ports.ports, link.findall('CABLE/PORT')[0].text, fr.type)
-
-    if to_port is None:
-      print(to.ports.ports, link.findall('CABLE/PORT')[1].text, to.type)
-
-    fr_ip = fr_port.ip if fr_port else ''
-    to_ip = to_port.ip if to_port else ''
-
-    fr_sub = fr_port.sub if fr_port else ''
-    to_sub = to_port.sub if to_port else ''
-
-    try:    fr_sub = IPAddress(fr_port.sub).netmask_bits()
-    except: pass
-    try:    to_sub = IPAddress(to_port.sub).netmask_bits()
-    except: pass
-
-    f.write('\t"{}"--"{}" [taillabel="{}{}{}"; headlabel="{}{}{}"];\n'.format(
-        fr.name, to.name,
-        fr_ip, '/' if fr_sub != '' else '', fr_sub,
-        to_ip, '/' if to_sub != '' else '', to_sub))
-  f.write('}')
-
-os.system('dot -Tpng network.dot -o network.png')
+if __name__ == "__main__":
+    raise SystemExit(main())

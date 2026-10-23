@@ -75,3 +75,14 @@ behavior checks active while disabling leak detection.
 
 System installation is explicit through the existing `*-install` targets.
 Use `PREFIX` and `DESTDIR` to stage an install without writing system directories.
+
+## Optional topology export
+
+`python3 graph.py input.xml` writes `network.dot` and uses Graphviz `dot` to render
+`network.png`. For a headless export with only Python's standard library, run
+`python3 graph.py input.xml --no-render --dot "output network.dot"`. `--png` sets
+the rendered image path. Korean/Unicode names are preserved and quoted for DOT;
+unknown ports use fallback names. Unresolvable device references are skipped with
+a warning. Activity files export the first `PACKETTRACER5/NETWORK`, matching the
+historical script's selection. Rendering failures return a nonzero exit status
+while leaving the DOT source available.
