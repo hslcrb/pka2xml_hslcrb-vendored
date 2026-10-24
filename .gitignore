@@ -2,3 +2,18 @@
 /gui/dist
 /gui/dist-electron
 .setup_done
+/pka2xml
+.build/
+pka2xml.building
+tests/__pycache__/
+
+# Local workspaces and reproducible build output
+.worktrees/
+web/node_modules/
+web/.next/
+web/out/
+web/tsconfig.tsbuildinfo
+test-results/
+playwright-report/
+*.log
+.build/

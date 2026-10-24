@@ -1,0 +1,31 @@
+name: Bug report / 오류 제보
+description: 재현 가능한 오류를 알려 주세요.
+title: "[Bug] "
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened? / 발생한 문제
+      description: 기대한 동작과 실제 동작을 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction / 재현 절차
+      description: 명령어 또는 클릭 순서, 공개 가능한 최소 예제를 포함해 주세요.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment / 실행 환경
+      placeholder: "Commit SHA · Linux/Windows/macOS · browser/version · CLI/Web/Desktop"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / 오류 기록
+      description: 비밀번호와 사설 네트워크 정보는 제거해 주세요.
+      render: text

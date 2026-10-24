@@ -1,140 +1,45 @@
 'use client';
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { runPka2xml } from '@/lib/wasmLoader';
+import { useEffect, useState } from 'react';
+import { ADVANCED_MODES, commandFor, MODES, outputName, PRIMARY_MODES, validateFile, type Mode } from '@/lib/conversion';
+import { useConversion } from '@/lib/useConversion';
+import Icon from './Icon';
+import FilePicker from './FilePicker';
+import ConversionResult from './ConversionResult';
 
-type Mode = 'decrypt' | 'encrypt' | 'patch' | 'forge';
-
-const modeConfig: Record<Mode, { flag: string; inputExt: string; outputExt: string; label: string }> = {
-    decrypt: { flag: '-d', inputExt: '.pka/.pkt', outputExt: '.xml', label: '복호화 (PKA/PKT → XML)' },
-    encrypt: { flag: '-e', inputExt: '.xml', outputExt: '.pka', label: '암호화 (XML → PKA)' },
-    patch: { flag: '-f', inputExt: '.pkt', outputExt: '.pkt', label: '버전 패치 (PKT → PKT)' },
-    forge: { flag: '--forge', inputExt: '.txt', outputExt: '.txt', label: '인증 토큰 생성 (Forge)' },
-};
-
-export default function WebGUI() {
-    const [mode, setMode] = useState<Mode>('decrypt');
-    const [file, setFile] = useState<File | null>(null);
-    const [dragging, setDragging] = useState(false);
-    const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
-    const [logs, setLogs] = useState<string[]>([]);
-    const [outputData, setOutputData] = useState<Uint8Array<ArrayBuffer> | null>(null);
-    const [outputName, setOutputName] = useState('');
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setDragging(false);
-        if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
-    }, []);
-
-    const handleRun = async () => {
-        if (!file) return;
-        setStatus('running');
-        setLogs([]);
-        setOutputData(null);
-
-        const buf = new Uint8Array(await file.arrayBuffer());
-        const cfg = modeConfig[mode];
-        const inputName = file.name;
-        const base = file.name.replace(/\.[^.]+$/, '');
-        const outName = `${base}_converted${cfg.outputExt.split('/')[0]}`;
-
-        const result = await runPka2xml(buf, [cfg.flag, inputName, outName]);
-        setLogs(result.logs);
-        if (result.success && result.output) {
-            setOutputData(result.output);
-            setOutputName(outName);
-            setStatus('done');
-        } else {
-            setStatus('error');
-        }
-    };
-
-    const handleDownload = () => {
-        if (!outputData) return;
-        const blob = new Blob([outputData.buffer]);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = outputName;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-    return (
-        <div className="gui-panel">
-            <h2 className="panel-title">GUI 모드</h2>
-
-            {/* 모드 선택 */}
-            <div className="mode-selector">
-                {(Object.keys(modeConfig) as Mode[]).map((m) => (
-                    <button
-                        key={m}
-                        onClick={() => setMode(m)}
-                        className={`mode-btn ${mode === m ? 'active' : ''}`}
-                    >
-                        {modeConfig[m].label}
-                    </button>
-                ))}
-            </div>
-
-            {/* 파일 드롭존 */}
-            <div
-                className={`dropzone ${dragging ? 'dragging' : ''} ${file ? 'has-file' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => inputRef.current?.click()}
-            >
-                <input ref={inputRef} type="file" style={{ display: 'none' }}
-                    onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])} />
-                {file ? (
-                    <div className="file-info">
-                        <span className="file-icon">📄</span>
-                        <span className="file-name">{file.name}</span>
-                        <span className="file-size">{(file.size / 1024).toFixed(1)} KB</span>
-                    </div>
-                ) : (
-                    <div className="drop-hint">
-                        <span className="drop-icon">⬆</span>
-                        <p>파일을 드래그 앤 드롭하거나 클릭하여 선택</p>
-                        <p className="drop-ext">지원 형식: {modeConfig[mode].inputExt}</p>
-                    </div>
-                )}
-            </div>
-
-            {/* 실행 버튼 */}
-            <button
-                className={`run-btn ${status === 'running' ? 'running' : ''}`}
-                onClick={handleRun}
-                disabled={!file || status === 'running'}
-            >
-                {status === 'running' ? '⏳ 변환 중...' : '▶ 변환 실행'}
-            </button>
-
-            {/* 로그 출력 */}
-            {logs.length > 0 && (
-                <div className="log-box">
-                    {logs.map((l, i) => (
-                        <div key={i} className={`log-line ${l.startsWith('[ERR]') ? 'err' : ''}`}>
-                            {l}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* 결과 다운로드 */}
-            {status === 'done' && outputData && (
-                <div className="result-box success">
-                    <span>✅ 변환 완료 — {outputName}</span>
-                    <button className="dl-btn" onClick={handleDownload}>⬇ 다운로드</button>
-                </div>
-            )}
-            {status === 'error' && (
-                <div className="result-box error">
-                    <span>❌ 변환 실패 — 로그를 확인하세요</span>
-                </div>
-            )}
+export default function WebGUI({ onBusyChange }: { onBusyChange: (busy: boolean) => void }) {
+  const [mode, setMode] = useState<Mode>('decrypt');
+  const [file, setFile] = useState<File | null>(null);
+  const [outputExtension, setOutputExtension] = useState('.pka');
+  const conversion = useConversion();
+  const { busy, state, reset, fail, run, cancel } = conversion;
+  useEffect(() => { onBusyChange(busy); return () => onBusyChange(false); }, [busy, onBusyChange]);
+  const cfg = MODES[mode];
+  const name = outputName(file, mode, outputExtension);
+  const selectMode = (next: Mode) => { reset(); setMode(next); setFile(null); };
+  const selectFile = (next: File | null) => {
+    reset();
+    const error = next ? validateFile(next, mode) : null;
+    setFile(error ? null : next);
+    if (error) fail(error);
+  };
+  return (
+    <div className="work-grid">
+      <section className="conversion-card glass" aria-labelledby="conversion-heading">
+        <div className="card-heading"><span className="eyebrow">MAKE SOMETHING CLEAR</span><span className="card-index">01 — 02</span></div>
+        <h2 id="conversion-heading">무엇을 꺼내볼까요?</h2>
+        <p className="card-intro">작업을 고르고, 파일 하나를 놓아주세요.</p>
+        <div className="mode-options" role="group" aria-label="변환 작업">
+          {PRIMARY_MODES.map(item => <button type="button" key={item} className={`mode-option ${mode === item ? 'is-active' : ''}`} aria-pressed={mode === item} disabled={busy} onClick={() => selectMode(item)}><Icon name={item === 'decrypt' ? 'code' : item === 'encrypt' ? 'file' : 'spark'} width={18} height={18} /><span>{MODES[item].title}</span><small>{item === 'decrypt' ? 'PKA · PKT → XML' : item === 'encrypt' ? 'XML → PKA · PKT' : 'PKA · PKT → PATCH'}</small></button>)}
         </div>
-    );
+        <div className="advanced-row"><label htmlFor="advanced-mode">다른 작업이 필요하다면</label><select id="advanced-mode" aria-label="고급 작업" value={ADVANCED_MODES.includes(mode) ? mode : ''} disabled={busy} onChange={event => selectMode((event.target.value || 'decrypt') as Mode)}><option value="">고급 작업</option>{ADVANCED_MODES.map(item => <option value={item} key={item}>{MODES[item].title}</option>)}</select></div>
+        <div className="input-heading"><h3><span>01</span>{cfg.input ? '원본 파일' : '파일 생성'}</h3><span>{cfg.input ? '파일은 업로드되지 않아요' : '입력 파일 없이 실행'}</span></div>
+        {cfg.input ? <FilePicker file={file} accept={cfg.accept} disabled={busy} onFile={selectFile} onReject={message => { setFile(null); fail(message); }} /> : <div className="forge-explanation"><span className="upload-emblem"><Icon name="spark" width={25} height={25} /></span><strong>입력 파일 없이 시작합니다.</strong><p>{cfg.description}</p></div>}
+        <div className="output-settings"><div><h3><span>02</span>변환 후 파일</h3><p className="planned-filename">{name}</p></div>{mode === 'encrypt' && <label className="format-label">출력 형식<select aria-label="출력 형식" value={outputExtension} disabled={busy} onChange={event => { reset(); setOutputExtension(event.target.value); }}><option value=".pka">.pka</option><option value=".pkt">.pkt</option></select></label>}</div>
+        <p className="mode-description"><Icon name="info" width={14} height={14} />{cfg.description}</p>
+        <button data-testid="run-conversion" className="button button-primary run-conversion" type="button" disabled={busy || (cfg.input && !file)} onClick={() => void run(file, mode, name)}>{busy ? <><span className="spinner spinner-small" />변환 중…</> : <>{state.phase === 'error' ? '다시 시도' : state.phase === 'done' ? '다시 변환' : mode === 'forge' ? '인증 파일 생성' : '변환 시작'}<Icon name="arrow" width={19} height={19} /></>}</button>
+        <details className="command-equivalent"><summary><Icon name="terminal" width={15} height={15} />같은 작업을 명령어로<Icon name="chevron" width={14} height={14} /></summary><code>{commandFor(mode, file, name)}</code></details>
+      </section>
+      <ConversionResult state={state} onCancel={cancel} />
+    </div>
+  );
 }

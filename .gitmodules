@@ -1,0 +1,12 @@
+[submodule "vendor/cryptopp"]
+	path = vendor/cryptopp
+	url = https://github.com/weidai11/cryptopp.git
+[submodule "vendor/re2"]
+	path = vendor/re2
+	url = https://github.com/google/re2.git
+[submodule "vendor/zlib"]
+	path = vendor/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "vendor/libzip"]
+	path = vendor/libzip
+	url = https://github.com/nih-at/libzip.git

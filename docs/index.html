@@ -1,64 +1,31 @@
-<html>
+<!doctype html>
+<html lang="ko">
 <head>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.2/pako.min.js" integrity="sha512-IjkvjWp4tSkhkQRb9gFwCcMhBWZLPKc7Zo8ifb6qxORyehV072QgRVG3F0fwAaJh0fnEFNLc2+XggoC5wvW24g==" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" integrity="sha512-GZ1RIgZaSc8rnco/8CXfRdCpDxRCphenIiZ2ztLy3XQfCbQUSCuk8IudvNHxkRA3oUg6q0qejgN/qqyG1duv5Q==" crossorigin="anonymous"></script>
-  <style type="text/css" media="screen">
-    html {
-      overflow-y: hidden;
-    }
-    body {
-      height: 100%;
-    }
-    #error {
-      color: red;
-      display: inline;
-      display: none;
-      padding-left: 10px;
-    }
-    #editor {
-      height: 100%;
-      width: 100%;
-    }
-    section {
-      display: flex;
-      flex-direction: column;
-      height: 98%;
-    }
-    #loading {
-      display: none;
-      padding-left: 10px;
-    }
-    #info {
-      float: right;
-    }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="pka2xml — 파일을 열고 네트워크를 이해하는 로컬 변환 작업실">
+  <title>pka2xml · 문서와 시작 안내</title>
+  <style>
+    :root{color-scheme:light;font-family:system-ui,sans-serif;color:#17343b;background:#f5f4ed}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 20% 15%,#bce6da88,transparent 55%),radial-gradient(ellipse at 85% 90%,#e9ad9f66,transparent 50%),#f5f4ed}
+    main{max-width:820px;padding:clamp(28px,7vw,72px);border:1px solid #fff;border-radius:32px;background:#ffffffb8;box-shadow:0 24px 80px #17343b12;backdrop-filter:blur(20px)}
+    .wordmark{font-size:24px;font-weight:750;letter-spacing:-1px}.eyebrow{margin-top:56px;text-transform:uppercase;letter-spacing:.18em;font-size:11px;font-weight:700;color:#26766d}
+    h1{font-size:clamp(36px,6vw,58px);line-height:1.16;letter-spacing:-.045em}p{line-height:1.9;color:#42616a}nav{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0}a{color:#26766d}nav a{display:inline-flex;align-items:center;min-height:48px;text-decoration:none;border-radius:15px;background:#26766d;color:white;padding:13px 20px;font-weight:650}nav a:last-child{background:#e2efea;color:#17343b}a:focus-visible{outline:3px solid #17343b;outline-offset:4px}
+    .note{padding-top:24px;border-top:1px solid #17343b20;font-size:13px}code{font-family:ui-monospace,monospace;background:#e2efea;border-radius:5px;padding:2px 5px}
   </style>
-  <script src="main.js"></script>
 </head>
 <body>
-  <section>
-    <div>
-      <input type="file" id="file" onchange="Update()">
-      <div id="info">
-        Source code:
-        <a href="https://github.com/mircodezorzi/pka2xml/blob/master/lambda/main.cpp" target="_blank">backend</a>
-        <a href="https://github.com/mircodezorzi/pka2xml/blob/master/docs/main.js" target="_blank">frontend</a>
-      </div>
-      <hr>
-      <button disabled id="encode" onclick="Encode()">Encode</button>
-      <button disabled id="decode" onclick="Decode()">Decode</button>
-      <button disabled id="retrofit" onclick="Retrofit()">Retrofit</button>
-      <p id="loading">Loading...</p>
-      <p id="error">Error!</p>
-      <hr>
-    </div>
-    <div id="editor"></div>
-  </section>
-  <script>
-    var editor = ace.edit("editor");
-    editor.setTheme("ace/theme/chrome");
-    editor.session.setMode("ace/mode/xml");
-    editor.setOption("showPrintMargin", false)
-    document.getElementById('editor').style.fontSize='15px';
-  </script>
+  <main>
+    <div class="wordmark">pka2xml<span aria-hidden="true" style="color:#d18e7f">.</span></div>
+    <p class="eyebrow">The transparent workshop</p>
+    <h1>파일을 열고,<br>네트워크를 이해하다.</h1>
+    <p>PKA·PKT와 XML을 오가는 작은 작업실입니다. 새 브라우저 앱은 파일을 기기 안의 WebAssembly 워커에서 변환합니다. 데스크톱과 명령행 도구도 함께 제공합니다.</p>
+    <nav aria-label="시작하기">
+      <a href="https://github.com/hslcrb/pka2xml_hslcrb-vendored#readme">실행 방법 보기 ↗</a>
+      <a href="https://github.com/hslcrb/pka2xml_hslcrb-vendored">소스 살펴보기 ↗</a>
+    </nav>
+    <p class="note">이 문서 페이지는 파일을 받거나 서버로 전송하지 않습니다. 제품 소개페이지는 <code>web/</code> 앱의 <code>/</code>, 변환 작업실은 <code>/workbench</code>에서 제공됩니다. 과거 원격 업로드 인터페이스는 종료했습니다.</p>
+    <p class="note">Independent open source · GPL-3.0 · Rheehose / Rhee Creative<br>Cisco 및 Packet Tracer와 독립적인 커뮤니티 프로젝트입니다.</p>
+  </main>
 </body>
 </html>

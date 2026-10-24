@@ -1,8 +1,13 @@
 import { ipcRenderer, contextBridge } from 'electron'
+import type { ElectronAPI } from '../shared/contracts.js'
 
-// --------- Expose some API to the Renderer process ---------
-contextBridge.exposeInMainWorld('electronAPI', {
-  openFile: (options: any) => ipcRenderer.invoke('dialog:openFile', options),
-  execute: (args: string[]) => ipcRenderer.invoke('execute-pka2xml', args),
-  onMessage: (callback: any) => ipcRenderer.on('main-process-message', callback)
-})
+const api: ElectronAPI = {
+  getEngineInfo: () => ipcRenderer.invoke('workshop:engine'),
+  chooseInput: operation => ipcRenderer.invoke('workshop:input', operation),
+  chooseOutput: (operation, inputPath) => ipcRenderer.invoke('workshop:output', operation, inputPath),
+  execute: request => ipcRenderer.invoke('workshop:execute', request),
+  cancel: () => ipcRenderer.invoke('workshop:cancel'),
+  revealOutput: () => ipcRenderer.invoke('workshop:reveal'),
+}
+
+contextBridge.exposeInMainWorld('electronAPI', Object.freeze(api))

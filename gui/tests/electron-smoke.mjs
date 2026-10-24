@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict'
+// Optional integration check: install Playwright locally or provide its module path.
+const { _electron: electron } = await import(process.env.PKA_PLAYWRIGHT_MODULE || 'playwright')
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import path from 'node:path'
+const directory = path.resolve('.test-build/flows')
+await mkdir(directory,{recursive:true})
+const input = path.join(directory,'입력 " ; 파일.xml')
+const original = await readFile('../B13_스7회.xml')
+await writeFile(input,original)
+const packet = path.join(directory,'새 패킷.pka')
+const output = path.join(directory,'돌아온 파일.xml')
+const bad = path.join(directory,'broken.pka')
+await writeFile(bad,Buffer.from([0]))
+const protectedOutput=path.join(directory,'preserved.xml')
+await writeFile(protectedOutput,'KEEP')
+const app=await electron.launch({executablePath:path.resolve(process.env.PKA_ELECTRON_PATH || 'node_modules/electron/dist/electron'),args:[...(process.env.PKA_ELECTRON_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),'--disable-gpu','.'],timeout:25000})
+const results=[]
+try {
+ const page=await app.firstWindow()
+ page.setDefaultTimeout(10000)
+ const boundary=await page.evaluate(()=>({require:typeof require,rawIPC:typeof window.ipcRenderer,methods:Object.keys(window.electronAPI)}))
+ assert.equal(boundary.require,'undefined');assert.equal(boundary.rawIPC,'undefined');assert.equal(boundary.methods.length,6)
+ const preferences=await app.evaluate(({BrowserWindow})=>{const p=BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences();return {contextIsolation:p.contextIsolation,nodeIntegration:p.nodeIntegration,sandbox:p.sandbox}})
+ assert.deepEqual(preferences,{contextIsolation:true,nodeIntegration:false,sandbox:true})
+ results.push('isolated typed bridge; no renderer Node or raw IPC access')
+ const errors=[];const requests=[]
+ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(/^https?:/.test(r.url()))requests.push(r.url())})
+ await page.waitForSelector('.mode-tabs')
+ await page.waitForFunction(()=>document.fonts.check('16px WorkshopSansUI'))
+ await page.screenshot({path:'.test-build/desktop-workbench.png',fullPage:true})
+ // OS dialog responses are controlled; renderer, preload, IPC and native execution stay real.
+ const files=async (source,destination)=>app.evaluate(({dialog},paths)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[paths.source]});dialog.showSaveDialog=async()=>({canceled:false,filePath:paths.destination});dialog.showMessageBox=async()=>({response:1,checkboxChecked:false})},{source,destination})
+ const choose=async()=>{await page.getByRole('button',{name:/^(파일 선택|다른 파일 선택)$/}).click();await page.getByRole('button',{name:/^(저장 위치 선택|저장 위치 변경)$/}).click()}
+ await page.getByRole('button',{name:/다시 묶기/}).click()
+ await files(input,packet);await choose();await page.getByRole('button',{name:'파일로 묶기',exact:true}).click();await page.locator('.result-card').waitFor()
+ assert.ok((await readFile(packet)).length>0);results.push('renderer → typed preload → IPC → native encrypt → file')
+ await page.getByRole('button',{name:/XML로 열기 PKA/}).click()
+ await files(packet,output);await choose();await page.getByRole('button',{name:'XML로 변환하기',exact:true}).click();await page.locator('.result-card').waitFor()
+ assert.deepEqual(await readFile(output),original);results.push('real fixture decrypt round trip byte-identical (Unicode, spaces, quotes, semicolon paths)')
+ await page.screenshot({path:'.test-build/desktop-result.png',fullPage:true})
+ await files(bad,protectedOutput);await choose();await page.getByRole('button',{name:'XML로 변환하기',exact:true}).click();await page.getByRole('alert').waitFor()
+ assert.equal(await readFile(protectedOutput,'utf8'),'KEEP');results.push('corrupt input shows actionable error and preserves existing output')
+ await files(packet,output);await choose();await page.getByRole('button',{name:'XML로 변환하기',exact:true}).click();await page.locator('.result-card').waitFor();results.push('conversion recovers after a failure')
+ await app.evaluate(({dialog})=>{dialog.showOpenDialog=async()=>({canceled:true,filePaths:[]});dialog.showSaveDialog=async()=>({canceled:true})})
+ await page.getByRole('button',{name:'다른 파일 선택',exact:true}).click();await page.getByRole('button',{name:'저장 위치 변경',exact:true}).click()
+ assert.equal(await page.getByRole('button',{name:'XML로 변환하기',exact:true}).isEnabled(),true);results.push('cancelled native dialog responses preserve the selected paths')
+ await page.getByRole('button',{name:'기록 복사',exact:true}).click();await page.getByRole('button',{name:'복사했어요',exact:true}).waitFor();results.push('working clipboard log copy')
+ await page.getByRole('button',{name:'작은 안내서',exact:true}).click();await page.getByRole('heading',{name:'처음 오셨나요?'}).waitFor();await page.getByRole('button',{name:'첫 작업 시작하기'}).click();results.push('guide navigation returns to the workbench')
+ await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setMinimumSize(360,600);w.setSize(390,844)})
+ await page.screenshot({path:'.test-build/desktop-narrow.png',fullPage:true})
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);results.push('390px layout has no horizontal overflow')
+ await page.keyboard.press('Tab')
+ assert.notEqual(await page.evaluate(()=>document.activeElement.tagName),'BODY');results.push('keyboard focus remains available')
+ assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);results.push('no renderer exceptions or network requests')
+ console.log(JSON.stringify({passed:results,errors,requests},null,2))
+} finally { await app.close() }
